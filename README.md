@@ -1,6 +1,6 @@
 # Gophertainer (Beta)
 
-**A container runtime written in Go - Beta Version #made by 15yr old**
+**A container runtime written in Go - Beta Version **
 
 Gophertainer is a comprehensive container runtime implementation that provides full compatibility with the Open Container Initiative (OCI) Runtime Specification v1.0.2, while offering advanced security features, checkpoint/restore capabilities, and flexible deployment options.
 
