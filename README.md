@@ -507,8 +507,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 <div align="center">
 
-**Gophertainer** - *Secure, Fast, and Reliable Container Runtime*
-
-Made with ❤️ by the Gophertainer Team
+made by single dev
 
 </div>
