@@ -1,4 +1,4 @@
-(i am 15yr old)
+
 <div align="center">
 
 # 🐹 Gophertainer
