@@ -4,7 +4,7 @@
 
 Gophertainer is a comprehensive container runtime implementation that provides full compatibility with the Open Container Initiative (OCI) Runtime Specification v1.0.2, while offering advanced security features, checkpoint/restore capabilities, and flexible deployment options.
 
-> **⚠️ Beta Release**: This is a beta version of Gophertainer. While feature-complete, it is still undergoing testing and refinement. Do NOT Use in production environments yet. Meny command can fail just report error in issues tab.
+> **⚠️ Beta Release**: This is a beta version of Gophertainer. While feature-complete, it is still undergoing testing and refinement. Do NOT Use in production environments yet. report error in issues tab.
 
 ## 🚀 Features
 
