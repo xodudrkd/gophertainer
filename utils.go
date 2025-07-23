@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 	
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/vishvananda/netlink"
@@ -833,7 +835,7 @@ func unmountPath(ctx context.Context, path string) error {
 // applySeccomp applies the seccomp profile to the process.
 func applySeccomp(ctx context.Context, cfg *ProcessConfig) error {
 	if cfg == nil {
-		return errors.New("process config cannot be nil")
+		return WrapSecurityError("seccomp_config", errors.New("process config cannot be nil"))
 	}
 	
 	logger := Logger(ctx).With("component", "seccomp")
@@ -843,37 +845,29 @@ func applySeccomp(ctx context.Context, cfg *ProcessConfig) error {
 		return nil
 	}
 
-	// var profile *specs.Seccomp
-	// var err error
+	var profile *specs.LinuxSeccomp
+	var err error
 	if cfg.SeccompProfile == "" || cfg.SeccompProfile == DefaultSeccompProfileName {
 		logger.Info("No seccomp profile provided, applying a restrictive default profile.")
-		// profile = defaultSeccompProfile()
-		logger.Info("Seccomp functionality disabled for compatibility.")
-		return nil
+		profile = defaultSeccompProfile()
 	} else {
 		logger.Info("Applying user-provided seccomp profile", "path", cfg.SeccompProfile)
-		logger.Info("Seccomp functionality disabled for compatibility.")
-		return nil
-		/*
-		var profileData []byte
-		profileData, err = os.ReadFile(cfg.SeccompProfile)
+		profile, err = loadSeccompProfile(cfg.SeccompProfile)
 		if err != nil {
-			return fmt.Errorf("failed to read seccomp profile: %w", err)
+			return WrapSecurityError("seccomp_load", fmt.Errorf("failed to load seccomp profile: %w", err))
 		}
-		if err = json.Unmarshal(profileData, &profile); err != nil {
-			return fmt.Errorf("failed to parse seccomp profile JSON: %w", err)
-		}
-		*/
 	}
 	
-	/*
+	// Validate the profile before applying
+	if err := validateSeccompProfile(profile); err != nil {
+		return WrapSecurityError("seccomp_validation", fmt.Errorf("seccomp profile validation failed: %w", err))
+	}
+	
 	filter, err := buildBPF(ctx, profile)
 	if err != nil {
-		return fmt.Errorf("failed to build BPF filter from seccomp profile: %w", err)
+		return WrapSecurityError("seccomp_bpf", fmt.Errorf("failed to build BPF filter from seccomp profile: %w", err))
 	}
-	*/
 	
-	/*
 	prog := &unix.SockFprog{
 		Len:    uint16(len(filter)),
 		Filter: &filter[0],
@@ -881,22 +875,21 @@ func applySeccomp(ctx context.Context, cfg *ProcessConfig) error {
 
 	// NO_NEW_PRIVS is essential for seccomp to be effective.
 	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
-		return fmt.Errorf("prctl(NO_NEW_PRIVS) for seccomp failed: %w", err)
+		return WrapSecurityError("seccomp_no_new_privs", fmt.Errorf("prctl(NO_NEW_PRIVS) for seccomp failed: %w", err))
 	}
 
 	if err := unix.Prctl(unix.PR_SET_SECCOMP, unix.SECCOMP_MODE_FILTER, uintptr(unsafe.Pointer(prog)), 0, 0); err != nil {
-		return fmt.Errorf("prctl(SET_SECCOMP) failed: %w", err)
+		return WrapSecurityError("seccomp_apply", fmt.Errorf("prctl(SET_SECCOMP) failed: %w", err))
 	}
 
-	logger.Info("Seccomp profile applied successfully.")
+	logger.Info("Seccomp profile applied successfully.", "syscalls", len(profile.Syscalls), "default_action", profile.DefaultAction)
 	return nil
-	*/
 }
 
 // defaultSeccompProfile returns a restrictive default seccomp profile.
-func defaultSeccompProfile() interface{} { // *specs.Seccomp {
+func defaultSeccompProfile() *specs.LinuxSeccomp {
 	// This list is now more restrictive, focusing on common application needs.
-	_ = []string{
+	allowedSyscalls := []string{
 		"accept4", "access", "arch_prctl", "brk", "capget", "capset",
 		"chdir", "clone", "close", "dup2", "dup3",
 		"epoll_create1", "epoll_ctl", "epoll_pwait",
@@ -919,26 +912,29 @@ func defaultSeccompProfile() interface{} { // *specs.Seccomp {
 		"uname", "wait4", "write", "writev",
 	}
 
-	return nil
-	/* &specs.Seccomp{
+	// Add additional syscalls for container functionality
+	containerSyscalls := []string{
+		"prctl", "setrlimit", "getresuid", "getresgid",
+		"setresuid", "setresgid", "setuid", "setgid",
+		"chroot", "mount", "umount2", "pivot_root",
+		"unshare", "setns", "getcpu", "sethostname",
+	}
+	
+	allowedSyscalls = append(allowedSyscalls, containerSyscalls...)
+
+	return &specs.LinuxSeccomp{
 		DefaultAction: specs.ActErrno,
 		Architectures: []specs.Arch{archMap[runtime.GOARCH]},
 		Syscalls: []specs.LinuxSyscall{
 			{Names: allowedSyscalls, Action: specs.ActAllow},
 		},
-	} */
+	}
 }
 
 // buildBPF constructs a BPF filter from a seccomp profile.
-func buildBPF(ctx context.Context, profile interface{}) ([]unix.SockFilter, error) {
+func buildBPF(ctx context.Context, profile *specs.LinuxSeccomp) ([]unix.SockFilter, error) {
 	if profile == nil {
 		return nil, errors.New("seccomp profile cannot be nil")
-	}
-	
-	// Type assertion to get the actual profile
-	seccompProfile, ok := profile.(*specs.LinuxSeccomp)
-	if !ok {
-		return nil, errors.New("invalid seccomp profile type")
 	}
 	
 	logger := Logger(ctx).With("component", "seccomp-bpf")
@@ -951,8 +947,9 @@ func buildBPF(ctx context.Context, profile interface{}) ([]unix.SockFilter, erro
 		return nil, fmt.Errorf("unknown seccomp architecture constant for: %s", hostArch)
 	}
 
+	// Verify architecture support
 	archSupported := false
-	for _, arch := range seccompProfile.Architectures {
+	for _, arch := range profile.Architectures {
 		if arch == hostArch {
 			archSupported = true
 			break
@@ -969,14 +966,23 @@ func buildBPF(ctx context.Context, profile interface{}) ([]unix.SockFilter, erro
 		bpfStmt(unix.BPF_LD|unix.BPF_W|unix.BPF_ABS, 0), // A = seccomp_data.nr
 	}
 
+	// Build syscall action map with conflict detection
 	syscallMap := make(map[uint32]specs.LinuxSeccompAction)
-	for _, rule := range seccompProfile.Syscalls {
+	for _, rule := range profile.Syscalls {
 		for _, name := range rule.Names {
 			syscallNum, err := getSyscallNum(name)
 			if err != nil {
 				logger.Warn("Unknown syscall in seccomp profile, skipping", "syscall", name)
 				continue
 			}
+			
+			// Check for conflicting actions
+			if existingAction, exists := syscallMap[syscallNum]; exists && existingAction != rule.Action {
+				logger.Warn("Conflicting seccomp actions for syscall, using first rule", 
+					"syscall", name, "existing", existingAction, "new", rule.Action)
+				continue
+			}
+			
 			syscallMap[syscallNum] = rule.Action
 		}
 	}
@@ -991,14 +997,14 @@ func buildBPF(ctx context.Context, profile interface{}) ([]unix.SockFilter, erro
 		// If the syscall number matches, jump to the return instruction.
 		// Otherwise, fall through to the next check.
 		bpf = append(bpf, bpfJump(unix.BPF_JMP|unix.BPF_JEQ|unix.BPF_K, num, 0, 1))
-		// Not a match, so jump over the return instruction.
+		// Return the action for this syscall
 		bpf = append(bpf, bpfStmt(unix.BPF_RET|unix.BPF_K, actionCode))
 	}
 
 	// Default action for any syscall that didn't match a rule.
-	defaultAction, ok := seccompActionMap[seccompProfile.DefaultAction]
+	defaultAction, ok := seccompActionMap[profile.DefaultAction]
 	if !ok {
-		return nil, fmt.Errorf("unknown default seccomp action: %s", seccompProfile.DefaultAction)
+		return nil, fmt.Errorf("unknown default seccomp action: %s", profile.DefaultAction)
 	}
 	bpf = append(bpf, bpfStmt(unix.BPF_RET|unix.BPF_K, defaultAction)) // fail: return default_action
 
@@ -1006,6 +1012,7 @@ func buildBPF(ctx context.Context, profile interface{}) ([]unix.SockFilter, erro
 	// We adjust the jump offset of the architecture check now that we know the full length.
 	bpf[1] = bpfJump(unix.BPF_JMP|unix.BPF_JEQ|unix.BPF_K, hostArchConst, 0, uint32(len(bpf)-2))
 
+	logger.Debug("Built BPF seccomp filter", "instructions", len(bpf), "syscall_rules", len(syscallMap))
 	return bpf, nil
 }
 
@@ -1023,6 +1030,109 @@ func getSyscallNum(name string) (uint32, error) {
 		return 0, fmt.Errorf("unknown syscall: %s", name)
 	}
 	return num, nil
+}
+
+// loadSeccompProfile loads a seccomp profile from a JSON file
+func loadSeccompProfile(profilePath string) (*specs.LinuxSeccomp, error) {
+	if profilePath == "" {
+		return nil, errors.New("profile path cannot be empty")
+	}
+	
+	// Validate file exists and is readable
+	if _, err := os.Stat(profilePath); err != nil {
+		return nil, fmt.Errorf("seccomp profile file not accessible: %w", err)
+	}
+	
+	profileData, err := os.ReadFile(profilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read seccomp profile: %w", err)
+	}
+	
+	if len(profileData) == 0 {
+		return nil, errors.New("seccomp profile file is empty")
+	}
+	
+	var profile specs.LinuxSeccomp
+	if err := json.Unmarshal(profileData, &profile); err != nil {
+		return nil, fmt.Errorf("failed to parse seccomp profile JSON: %w", err)
+	}
+	
+	return &profile, nil
+}
+
+// validateSeccompProfile validates a seccomp profile for security and correctness
+func validateSeccompProfile(profile *specs.LinuxSeccomp) error {
+	if profile == nil {
+		return errors.New("seccomp profile cannot be nil")
+	}
+	
+	// Validate architectures
+	if len(profile.Architectures) == 0 {
+		return errors.New("seccomp profile must specify at least one architecture")
+	}
+	
+	// Check if current architecture is supported
+	currentArch, ok := archMap[runtime.GOARCH]
+	if !ok {
+		return fmt.Errorf("current architecture %s is not supported", runtime.GOARCH)
+	}
+	
+	architectureSupported := false
+	for _, arch := range profile.Architectures {
+		if arch == currentArch {
+			architectureSupported = true
+			break
+		}
+	}
+	
+	if !architectureSupported {
+		return fmt.Errorf("seccomp profile does not support current architecture %s", runtime.GOARCH)
+	}
+	
+	// Validate default action
+	if _, ok := seccompActionMap[profile.DefaultAction]; !ok {
+		return fmt.Errorf("invalid default action: %s", profile.DefaultAction)
+	}
+	
+	// Validate syscall rules
+	for i, rule := range profile.Syscalls {
+		if len(rule.Names) == 0 {
+			return fmt.Errorf("syscall rule %d has no syscall names", i)
+		}
+		
+		if _, ok := seccompActionMap[rule.Action]; !ok {
+			return fmt.Errorf("invalid action %s in syscall rule %d", rule.Action, i)
+		}
+		
+		// Validate syscall names exist
+		for _, name := range rule.Names {
+			if _, err := getSyscallNum(name); err != nil {
+				// Log warning but don't fail validation for future compatibility
+				continue
+			}
+		}
+	}
+	
+	// Security checks
+	if profile.DefaultAction == specs.ActAllow {
+		return errors.New("default action ALLOW is not secure - use a restrictive default with explicit allows")
+	}
+	
+	// Check for dangerous syscalls
+	dangerousSyscalls := []string{"ptrace", "kexec_load", "kexec_file_load", "bpf", "delete_module", "init_module", "finit_module"}
+	for _, rule := range profile.Syscalls {
+		if rule.Action == specs.ActAllow {
+			for _, name := range rule.Names {
+				for _, dangerous := range dangerousSyscalls {
+					if name == dangerous {
+						return fmt.Errorf("dangerous syscall %s is explicitly allowed - this is not recommended", name)
+					}
+				}
+			}
+		}
+	}
+	
+	return nil
 }
 
 // --- Seccomp and Capability Maps ---

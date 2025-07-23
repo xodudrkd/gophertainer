@@ -1,75 +1,14 @@
+# Gophertainer (Beta)
 
-<div align="center">
-
-# 🐹 Gophertainer
-
-[![Go Version](https://img.shields.io/badge/Go-1.23%2B-blue.svg)](https://golang.org/)
-[![OCI Compliance](https://img.shields.io/badge/OCI-v1.0.2-green.svg)](https://github.com/opencontainers/runtime-spec)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
-[![Beta](https://img.shields.io/badge/Status-Beta-orange.svg)]()
-
-**A high-performance container runtime written in Go**
-
-*weekly to monthly update*
-*bug report always welcome*
-
-</div>
-
----
-
-## 📋 Table of Contents
-
-- [🔍 Overview](#-overview)
-- [✨ Key Features](#-key-features)
-- [🚀 Quick Start](#-quick-start)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [First Container](#first-container)
-- [📖 Usage Guide](#-usage-guide)
-  - [Standalone Mode](#standalone-mode)
-  - [OCI Mode](#oci-mode)
-  - [Checkpoint & Restore](#checkpoint--restore)
-- [⚙️ Configuration & Setup](#️-configuration--setup)
-  - [Environment Variables](#environment-variables)
-  - [Config Files](#config-files)
-  - [Rootless Setup](#rootless-setup)
-- [🏗️ Technical Details](#️-technical-details)
-  - [Architecture](#architecture)
-  - [Performance](#performance)
-  - [Security](#security)
-- [🔌 Integration](#-integration)
-  - [Container Orchestrators](#container-orchestrators)
-  - [Monitoring](#monitoring)
-- [🆘 Support](#-support)
-  - [Troubleshooting](#troubleshooting)
-  - [FAQ](#faq)
-- [🤝 Contributing](#-contributing)
-- [📄 License](#-license)
-- [📚 References](#-references)
-
----
-
-## 🔍 Overview
+**A container runtime written in Go - Beta Version**
 
 Gophertainer is a comprehensive container runtime implementation that provides full compatibility with the Open Container Initiative (OCI) Runtime Specification v1.0.2, while offering advanced security features, checkpoint/restore capabilities, and flexible deployment options.
 
-> **⚠️ Beta Release**: This is a beta version of Gophertainer. While feature-complete, it is still undergoing testing and refinement. **Do NOT use in production environments yet.** Many commands can fail - please report errors in the [issues tab](https://github.com/xodudrkd/gophertainer/issues).
+> **⚠️ Beta Release**: This is a beta version of Gophertainer. While feature-complete, it is still undergoing testing and refinement. Do NOT Use in production environments yet. Meny command can fail just report error in issues tab.
 
-### Why Gophertainer?
+## 🚀 Features
 
-- **🛡️ Security First**: Advanced security hardening with multiple protection layers
-- **⚡ High Performance**: Optimized for speed and low resource overhead  
-- **🔄 Checkpoint/Restore**: CRIU-based container migration and persistence
-- **🌐 Modern Networking**: Full CNI support with IPv4/IPv6 dual stack
-- **🎯 OCI Compliant**: 100% compatible with OCI Runtime Specification v1.0.2
-- **🔧 Flexible**: Works standalone or integrates with container orchestrators
-
----
-
-## ✨ Key Features
-
-### Core Runtime Capabilities
+### Core Runtime
 - **OCI Compliance**: Full OCI Runtime Specification v1.0.2 implementation
 - **Dual Mode Operation**: Both standalone and OCI-compliant command interfaces
 - **Container Lifecycle**: Complete create, start, stop, delete workflow
@@ -81,91 +20,162 @@ Gophertainer is a comprehensive container runtime implementation that provides f
 - **Capabilities Management**: Fine-grained Linux capability control
 - **Seccomp Filtering**: System call filtering with custom profiles
 - **Rootless Mode**: Run containers without root privileges
+- **No New Privileges**: Prevents privilege escalation attacks
 
-### Advanced Features
+### Checkpoint & Restore
 - **CRIU Integration**: Advanced checkpoint/restore using CRIU
+- **State Persistence**: Save and restore complete container state
+- **Live Migration**: Move running containers between hosts
+- **Pre-dump Support**: Minimize downtime with iterative checkpointing
+
+### Networking
+- **Bridge Networking**: Traditional Linux bridge networking
 - **CNI Support**: Modern Container Network Interface plugins
+- **IPv4/IPv6 Dual Stack**: Full IPv6 support alongside IPv4
+- **Network Isolation**: Complete network namespace separation
+
+### Storage & Filesystem
 - **Multiple Storage Drivers**: Support for various storage backends
-- **Resource Management**: Cgroup v1/v2 support with CPU, memory, and I/O limits
-- **Built-in Monitoring**: Container health monitoring and automatic recovery
+- **Volume Management**: Flexible host-container volume mounting
+- **Rootfs Formats**: Support for directories, tar archives, and disk images
+- **Loop Device Management**: Automated loop device handling for disk images
 
----
+### Resource Management
+- **Cgroup v1/v2**: Full support for both cgroup versions
+- **CPU Limits**: CPU shares and quota management
+- **Memory Limits**: Memory usage constraints and OOM protection
+- **Process Limits**: PID namespace process counting
+- **I/O Controls**: Disk I/O throttling and prioritization
 
-## 🚀 Quick Start
+### Monitoring & Recovery
+- **Built-in Monitoring**: Container health monitoring
+- **Automatic Recovery**: Container restart on failure
+- **Metrics Collection**: Resource usage and performance metrics
+- **Graceful Shutdown**: Clean container termination handling
 
-### Prerequisites
+### Plugin Architecture
+- **Extensible Plugin System**: Support for third-party extensions
+- **Multiple Plugin Types**: Storage, Network, Monitoring, Runtime, and Security plugins
+- **Event-Driven Architecture**: Rich event system for plugin communication
+- **Security Framework**: Plugin validation, integrity checking, and sandboxing
+- **Hot-Pluggable**: Dynamic plugin loading/unloading without runtime restart
+- **Configuration Management**: Schema-based plugin configuration with validation
 
-**Required:**
-- Linux Kernel 4.14+ (for namespace support)
-- Go 1.23+ (for building from source)
-- Root access or user namespace support (for rootless mode)
+## 📋 Prerequisites
 
-**Optional:**
-- CRIU (for checkpoint/restore)
-- CNI plugins (for advanced networking)
-- systemd (for cgroup v2 delegation in rootless mode)
+### Required Tools
+- **Go 1.23+**: For building from source
+- **Linux Kernel 4.14+**: Container namespace support
+- **Root Access**: For full functionality (or user namespace support for rootless)
 
-### Installation
+### Optional Dependencies
+- **CRIU**: For checkpoint/restore functionality
+- **CNI Plugins**: For advanced networking
+- **systemd**: For cgroup v2 delegation (rootless mode)
+
+## 🛠️ Installation
+
+### Build from Source
 
 ```bash
-# Clone and build
-git clone https://github.com/xodudrkd/gophertainer.git
-cd gophertainer
+# Clone the repository
+git clone <repository-url>
+cd Golang
+
+# Build the binary
 go build -o gophertainer .
 
-# Install system-wide (optional)
+# Install to system path (optional)
 sudo mv gophertainer /usr/local/bin/
+```
 
-# Install dependencies
+### Dependencies
+```bash
+# Install required Go modules
 go mod tidy
 
-# Optional: Install CRIU for checkpoint/restore
-sudo apt-get install criu  # Ubuntu/Debian
-sudo dnf install criu      # RHEL/CentOS/Fedora
+# Install optional CRIU (for checkpoint/restore)
+# Ubuntu/Debian:
+sudo apt-get install criu
+
+# RHEL/CentOS/Fedora:
+sudo dnf install criu
 ```
 
-### First Container
-
-**Simple interactive container:**
-```bash
-sudo gophertainer --name my-first-container \
-    --rootfs /path/to/alpine.tar.gz \
-    --cmd "/bin/sh" -i -t
-```
-
-**Detached container with limits:**
-```bash
-sudo gophertainer --name web-server \
-    --rootfs /path/to/nginx.tar.gz \
-    --cmd "nginx -g 'daemon off;'" \
-    --mem 512 --cpu 1.0 --detach
-```
-
----
-
-## 📖 Usage Guide
+## 🚦 Quick Start
 
 ### Standalone Mode
 
-**Basic Usage:**
+```bash
+# Run an interactive Alpine Linux container
+sudo gophertainer --name alpine-test --rootfs /path/to/alpine.tar.gz --cmd "/bin/sh" -i -t
+
+# Run a detached container with resource limits
+sudo gophertainer --name web-server \
+    --rootfs /path/to/nginx.tar.gz \
+    --cmd "nginx -g 'daemon off;'" \
+    --mem 512 --cpu 1.0 \
+    --volume /var/www:/usr/share/nginx/html \
+    --detach
+```
+
+### OCI Mode
+
+```bash
+# Create an OCI bundle
+mkdir my-container
+cd my-container
+gophertainer spec
+
+# Add your rootfs
+mkdir rootfs
+# ... populate rootfs with your container filesystem
+
+# Create and run the container
+sudo gophertainer create my-container-id --bundle .
+sudo gophertainer start my-container-id
+
+# Manage the container
+sudo gophertainer state my-container-id
+sudo gophertainer kill my-container-id TERM
+sudo gophertainer delete my-container-id
+```
+
+### Checkpoint & Restore
+
+```bash
+# Create a checkpoint
+sudo gophertainer checkpoint my-running-container
+
+# List available checkpoints
+sudo gophertainer checkpoint-list
+
+# Restore from checkpoint
+sudo gophertainer restore <checkpoint-id>
+```
+
+## 📖 Usage
+
+### Command-Line Options
+
+#### Standalone Mode
 ```bash
 gophertainer [OPTIONS]
 ```
 
 **Core Options:**
 - `--name <string>`: Container name (required)
-- `--rootfs <path>`: Root filesystem path (required) 
+- `--rootfs <path>`: Root filesystem path (required)
 - `--cmd "<command>"`: Command to execute (required unless -i)
 - `-i, --interactive`: Run interactive shell
 - `-t, --tty`: Allocate pseudo-TTY
-- `--detach`: Run in background
 
 **Resource Limits:**
 - `--mem <MB>`: Memory limit in megabytes
 - `--cpu <float>`: CPU limit (e.g., 0.5 for 50%, 2.0 for 2 cores)
 - `--pids <int>`: Process limit
 
-**Security Options:**
+**Security:**
 - `--rootless`: Enable rootless mode
 - `--no-new-privs`: Set no_new_privs bit
 - `--seccomp <profile>`: Seccomp profile path
@@ -176,81 +186,119 @@ gophertainer [OPTIONS]
 - `--cni`: Enable CNI networking
 - `--bridge <name>`: Bridge name
 
-### OCI Mode
+### OCI Commands
 
-**Container Lifecycle:**
+#### Container Lifecycle
 ```bash
 # Generate OCI spec template
 gophertainer spec [--output config.json]
 
-# Create container from bundle
-gophertainer create <container-id> --bundle <path>
+# Create container
+gophertainer create <id> --bundle <path>
 
-# Start the container
-gophertainer start <container-id>
+# Start container
+gophertainer start <id>
 
-# Check container state
-gophertainer state <container-id>
+# Get container state
+gophertainer state <id>
 
 # Send signal to container
-gophertainer kill <container-id> [SIGNAL]
+gophertainer kill <id> [SIGNAL]
 
 # Delete container
-gophertainer delete <container-id> [--force]
+gophertainer delete <id> [--force]
 
-# List all containers
+# List containers
 gophertainer list [--format table|json]
 ```
 
-**Complete OCI Workflow:**
-```bash
-# Set up OCI bundle
-mkdir my-container && cd my-container
-gophertainer spec
-mkdir rootfs
-# ... populate rootfs with container filesystem
-
-# Run the container
-sudo gophertainer create my-container-id --bundle .
-sudo gophertainer start my-container-id
-
-# Monitor and manage
-sudo gophertainer state my-container-id
-sudo gophertainer kill my-container-id TERM
-sudo gophertainer delete my-container-id
-```
-
-### Checkpoint & Restore
-
+#### Checkpoint Operations
 ```bash
 # Create checkpoint
 gophertainer checkpoint <container-name> [--leave-running]
 
-# List available checkpoints  
-gophertainer checkpoint-list
-
 # Restore from checkpoint
 gophertainer restore <checkpoint-id> [--detach]
+
+# List checkpoints
+gophertainer checkpoint-list
 
 # Delete checkpoint
 gophertainer checkpoint-delete <checkpoint-id>
 ```
 
----
+## 🏗️ Architecture
 
-## ⚙️ Configuration & Setup
+### Core Components
+
+```
+main.go              - Entry point and process management
+container.go         - Container lifecycle management
+config.go           - Configuration structures
+oci.go              - OCI specification implementation
+oci_cli.go          - OCI command-line interface
+```
+
+### Security & Hardening
+```
+security_hardening.go - Advanced security protections
+validation.go        - Input validation and sanitization
+errors.go           - Error handling and reporting
+```
+
+### Resource Management
+```
+memory_pool.go       - Memory management and pooling
+resource_manager.go  - Resource allocation and limits
+cni.go              - Container Network Interface support
+```
+
+### Storage & I/O
+```
+storage_drivers.go   - Storage backend implementations
+cleanup.go          - Resource cleanup management
+utils.go            - Utility functions
+```
+
+### Advanced Features
+```
+checkpoint.go        - CRIU-based checkpoint/restore
+runtime_hooks.go     - Container lifecycle hooks
+monitoring_recovery.go - Health monitoring and recovery
+dependency_injection.go - Clean architecture DI
+metrics.go          - Performance metrics collection
+signals.go          - Signal handling
+```
+
+### Plugin System
+```
+plugin.go           - Core plugin interface and lifecycle management
+plugin_registry.go  - Plugin discovery and registry management
+plugin_events.go    - Event system for plugin communication
+plugin_security.go  - Plugin security validation and sandboxing
+plugin_integration.go - Container runtime integration layer
+example_plugins.go  - Example plugin implementations
+```
+
+### Testing
+```
+test.go                    - Basic functionality tests
+enhanced_container_test.go - Advanced container testing
+```
+
+## 🔧 Configuration
 
 ### Environment Variables
 - `DEBUG=1`: Enable debug logging
 - `GOPHERTAINER_ROOT`: Override default state directory
-- `GOPHERTAINER_METRICS=1`: Enable performance monitoring
-- `GOPHERTAINER_POOL_SIZE=100`: Set memory pool size
 - `CRIU_PATH`: Path to CRIU binary (if not in PATH)
 
 ### Config Files
 - **OCI Bundle**: `config.json` (OCI specification)
 - **Checkpoint State**: Stored in `/var/lib/gophertainer/checkpoints/`
 - **Runtime State**: Stored in `/run/oci-runtime/`
+- **Plugin Configuration**: `/etc/gophertainer/plugin-config/`
+- **Plugin Directories**: `/usr/local/lib/gophertainer/plugins/`, `/etc/gophertainer/plugins/`
 
 ### Rootless Setup
 ```bash
@@ -263,94 +311,238 @@ sudo systemctl enable --now systemd-oomd
 systemctl --user enable --now systemd-oomd.service
 ```
 
----
+## 🔌 Plugin System
 
-## 🏗️ Technical Details
+### Overview
 
-### Architecture
+Gophertainer features a comprehensive plugin architecture that allows third-party developers to extend container functionality without modifying the core runtime. The plugin system is designed with security, performance, and ease of development in mind.
 
-**Core Components:**
-```
-main.go                    - Entry point and process management
-container.go              - Container lifecycle management  
-config.go                 - Configuration structures
-oci.go                    - OCI specification implementation
-oci_cli.go               - OCI command-line interface
-```
+### Plugin Types
 
-**Security & Resource Management:**
-```
-security_hardening.go     - Advanced security protections
-validation.go            - Input validation and sanitization
-resource_manager.go      - Resource allocation and limits
-memory_pool.go          - Memory management and pooling
+#### Storage Plugins
+Extend storage capabilities with custom backends, compression, encryption, or distributed storage systems.
+
+```go
+type StoragePlugin interface {
+    Plugin
+    Mount(source, target string, options map[string]interface{}) error
+    Unmount(target string) error
+    CreateSnapshot(source, snapshot string) error
+}
 ```
 
-**Advanced Features:**
+#### Network Plugins
+Implement custom networking solutions, SDN integration, or specialized network configurations.
+
+```go
+type NetworkPlugin interface {
+    Plugin
+    PluginEventHandler
+    SetupNetwork(containerID, netNS string) (*NetworkResult, error)
+    TeardownNetwork(containerID, netNS string) error
+}
 ```
-checkpoint.go            - CRIU-based checkpoint/restore
-runtime_hooks.go         - Container lifecycle hooks
-monitoring_recovery.go   - Health monitoring and recovery
-cni.go                   - Container Network Interface support
-storage_drivers.go       - Storage backend implementations
+
+#### Monitoring Plugins
+Add custom metrics collection, alerting, or integration with monitoring systems.
+
+```go
+type MonitoringPlugin interface {
+    Plugin
+    PluginEventHandler
+    CollectMetrics() map[string]interface{}
+    GetHealthStatus() HealthStatus
+}
 ```
 
-### Performance
+### Plugin Development
 
-**Benchmarks:**
+#### Basic Plugin Structure
+```go
+package main
 
-| Metric | Gophertainer | Docker | runc | Performance |
-|--------|--------------|--------|------|-------------|
-| Container Start Time | ~45ms | ~120ms | ~35ms | ✅ Fast |
-| Memory Overhead | ~8MB | ~25MB | ~5MB | ✅ Efficient |
-| CPU Overhead | ~2% | ~5% | ~1% | ✅ Low Impact |
-| Checkpoint Size | ~15MB | N/A | N/A | ✅ Compact |
-| Restore Time | ~200ms | N/A | N/A | ✅ Quick |
+import (
+    "context"
+    "fmt"
+)
 
-**Performance Features:**
-- **Zero-Copy Networking**: Optimized network I/O
-- **Memory Pooling**: Reduced GC pressure
-- **Lazy Loading**: On-demand resource allocation
-- **Batch Operations**: Efficient bulk container management
-- **Async I/O**: Non-blocking operations where possible
+type MyPlugin struct {
+    config map[string]interface{}
+    logger *slog.Logger
+}
 
-**Optimization Tips:**
+func NewMyPlugin() Plugin {
+    return &MyPlugin{
+        logger: slog.Default().With("plugin", "my-plugin"),
+    }
+}
+
+func (p *MyPlugin) GetInfo() PluginInfo {
+    return PluginInfo{
+        Name:        "my-plugin",
+        Version:     "1.0.0",
+        Type:        PluginTypeStorage,
+        Description: "Example plugin implementation",
+        Author:      "Your Name",
+        Config: PluginConfigSchema{
+            Properties: map[string]PluginConfigProperty{
+                "storage_path": {
+                    Type:        "string",
+                    Default:     "/var/lib/my-plugin",
+                    Description: "Storage path for plugin data",
+                },
+            },
+            Required: []string{"storage_path"},
+        },
+    }
+}
+
+func (p *MyPlugin) Initialize(ctx context.Context, config map[string]interface{}) error {
+    p.config = config
+    // Plugin initialization logic
+    return nil
+}
+
+func (p *MyPlugin) Start(ctx context.Context) error {
+    // Start plugin services
+    return nil
+}
+
+func (p *MyPlugin) Stop(ctx context.Context) error {
+    // Stop plugin services
+    return nil
+}
+
+func (p *MyPlugin) Cleanup(ctx context.Context) error {
+    // Cleanup plugin resources
+    return nil
+}
+
+// Export the plugin constructor
+func NewPlugin() Plugin {
+    return NewMyPlugin()
+}
+```
+
+#### Building Plugins
 ```bash
-# Enable performance monitoring
-export GOPHERTAINER_METRICS=1
+# Build as shared library
+go build -buildmode=plugin -o my-plugin.so my-plugin.go
 
-# Use memory pooling for high-throughput scenarios
-export GOPHERTAINER_POOL_SIZE=100
-
-# Optimize for container density
-gophertainer --mem 64 --cpu 0.1 --pids 32
+# Install to plugin directory
+sudo mv my-plugin.so /usr/local/lib/gophertainer/plugins/
 ```
 
-### Security
+#### Plugin Configuration
+Create a JSON configuration file:
+```json
+{
+  "name": "my-plugin",
+  "enabled": true,
+  "storage_path": "/var/lib/my-plugin",
+  "custom_option": "value"
+}
+```
 
-**Security Features:**
-- **Defense in Depth**: Multiple security layers
-- **Secure Defaults**: Conservative default configuration
-- **Input Validation**: Comprehensive input sanitization
-- **Resource Limits**: Prevent resource exhaustion attacks
-- **Audit Logging**: Security event logging
+Save to `/etc/gophertainer/plugin-config/my-plugin.json`
 
-**Security Hardening:**
-- Process limit enforcement
-- Memory exhaustion protection
-- File descriptor limits
-- Disk space monitoring
-- Network resource limiting
-- Path traversal prevention
-- Anti-exploit protections
+### Plugin Management
 
----
+#### Discovery and Loading
+```bash
+# List available plugins
+gophertainer plugin list
+
+# Load specific plugin
+gophertainer plugin load my-plugin
+
+# Show plugin info
+gophertainer plugin info my-plugin
+
+# Unload plugin
+gophertainer plugin unload my-plugin
+```
+
+#### Plugin Security
+- **Binary Validation**: SHA256 hash verification
+- **Path Restrictions**: Allowed directory enforcement
+- **Permission Checks**: File permission validation
+- **Signature Verification**: Digital signature support (configurable)
+- **Sandboxed Execution**: Isolated plugin execution environment
+
+#### Event System
+Plugins can subscribe to container lifecycle events:
+
+```go
+func (p *MyPlugin) HandleEvent(ctx context.Context, event *PluginEvent) error {
+    switch event.Type {
+    case ContainerEventStarting:
+        // Handle container start
+    case StorageEventMounting:
+        // Handle storage mount
+    case NetworkEventSetup:
+        // Handle network setup
+    }
+    return nil
+}
+
+func (p *MyPlugin) GetHandledEvents() []PluginEventType {
+    return []PluginEventType{
+        ContainerEventStarting,
+        StorageEventMounting,
+        NetworkEventSetup,
+    }
+}
+```
+
+### Example Plugins
+
+The repository includes several example plugins demonstrating different capabilities:
+
+#### Storage Plugin Example
+- Background storage maintenance
+- Compression and deduplication
+- Snapshot management
+- Configurable storage paths
+
+#### Network Plugin Example
+- Custom bridge creation
+- VLAN tagging support
+- Network monitoring
+- Event-driven network management
+
+#### Monitoring Plugin Example
+- Metrics collection and export
+- Resource usage tracking
+- Alert generation
+- Dashboard integration
+
+### Plugin Configuration
+
+#### Global Plugin Settings
+```bash
+# Enable plugin system
+export GOPHERTAINER_PLUGINS_ENABLED=true
+
+# Set plugin directories
+export GOPHERTAINER_PLUGIN_DIRS="/usr/local/lib/gophertainer/plugins:/opt/plugins"
+
+# Enable plugin security
+export GOPHERTAINER_PLUGIN_SECURITY=true
+```
+
+#### Runtime Configuration
+Plugins are automatically discovered and loaded during runtime initialization. Configuration is loaded from:
+1. `/etc/gophertainer/plugin-config/` (system-wide)
+2. `~/.config/gophertainer/plugin-config/` (user-specific)
+3. Environment variables
+4. Command-line flags
 
 ## 🔌 Integration
 
 ### Container Orchestrators
 
-**containerd Integration:**
+#### containerd
 Add to `/etc/containerd/config.toml`:
 ```toml
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.gophertainer]
@@ -358,7 +550,7 @@ Add to `/etc/containerd/config.toml`:
   runtime_engine = "/usr/local/bin/gophertainer"
 ```
 
-**CRI-O Integration:**
+#### CRI-O
 Add to `/etc/crio/crio.conf`:
 ```toml
 [crio.runtime.runtimes.gophertainer]
@@ -366,7 +558,7 @@ runtime_path = "/usr/local/bin/gophertainer"
 runtime_type = "oci"
 ```
 
-**Kubernetes Integration:**
+#### Kubernetes
 Use with CRI-O or containerd runtime classes:
 ```yaml
 apiVersion: node.k8s.io/v1
@@ -376,28 +568,44 @@ metadata:
 handler: gophertainer
 ```
 
-### Monitoring
+## 📊 Monitoring
 
-**Built-in Metrics:**
+### Built-in Metrics
 - Container count and lifecycle events
 - Resource usage (CPU, memory, I/O)
 - Security events and violations
 - Network traffic statistics
 - Checkpoint/restore performance
 
-**Health Checks:**
+### Health Checks
 - Container process monitoring
 - Resource exhaustion detection
 - Automatic container restart
 - Graceful shutdown handling
 
----
+## 🛡️ Security
 
-## 🆘 Support
+### Security Features
+- **Defense in Depth**: Multiple security layers
+- **Secure Defaults**: Conservative default configuration
+- **Input Validation**: Comprehensive input sanitization
+- **Resource Limits**: Prevent resource exhaustion attacks
+- **Audit Logging**: Security event logging
 
-### Troubleshooting
+### Security Hardening
+- Process limit enforcement
+- Memory exhaustion protection
+- File descriptor limits
+- Disk space monitoring
+- Network resource limiting
+- Path traversal prevention
+- Anti-exploit protections
 
-**Permission Denied Errors:**
+## 🐛 Troubleshooting
+
+### Common Issues
+
+#### Permission Denied Errors
 ```bash
 # Solution 1: Run as root
 sudo gophertainer ...
@@ -406,7 +614,7 @@ sudo gophertainer ...
 gophertainer --rootless ...
 ```
 
-**Network Setup Failures:**
+#### Network Setup Failures
 ```bash
 # Ensure bridge-utils is installed
 sudo apt-get install bridge-utils
@@ -415,7 +623,7 @@ sudo apt-get install bridge-utils
 sudo ip netns list
 ```
 
-**Checkpoint/Restore Issues:**
+#### Checkpoint/Restore Issues
 ```bash
 # Verify CRIU installation
 criu check
@@ -424,7 +632,7 @@ criu check
 sudo criu dump --help
 ```
 
-**Debug Mode:**
+### Debug Mode
 ```bash
 # Enable debug logging
 DEBUG=1 gophertainer ...
@@ -433,43 +641,7 @@ DEBUG=1 gophertainer ...
 gophertainer state <container-id>
 ```
 
-### FAQ
-
-**General Questions:**
-
-**Q: How does Gophertainer compare to Docker?**
-A: Gophertainer is a container runtime (like runc), while Docker is a complete container platform. Gophertainer focuses on OCI compliance, security, and checkpoint/restore capabilities.
-
-**Q: Can I use Gophertainer with Kubernetes?**
-A: Yes! Gophertainer integrates with Kubernetes via CRI-O or containerd. See the [Integration](#-integration) section for setup instructions.
-
-**Q: Is Gophertainer production-ready?**
-A: Currently in beta. While feature-complete, it's still undergoing testing. **Do not use in production** until the stable release.
-
-**Technical Questions:**
-
-**Q: What's the minimum Linux kernel version required?**
-A: Linux 4.14+ is required for full namespace support. Some features may work on older kernels.
-
-**Q: How do I enable rootless mode?**
-A: Configure user namespace mappings and use the `--rootless` flag. See the [Configuration](#️-configuration--setup) section for details.
-
-**Q: Can I checkpoint containers running databases?**
-A: CRIU checkpoint/restore works best with stateless applications. Database containers may require special handling or may not be supported.
-
-**Performance Questions:**
-
-**Q: Why is Gophertainer slower than runc?**
-A: Gophertainer includes additional security checks and monitoring. The overhead is typically <10% and can be tuned based on your security requirements.
-
-**Q: How can I optimize memory usage?**
-A: Use memory pooling (`GOPHERTAINER_POOL_SIZE`), set appropriate container limits, and consider using lightweight base images.
-
----
-
 ## 🤝 Contributing
-
-We welcome contributions! Here's how to get started:
 
 1. **Fork** the repository
 2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
@@ -477,7 +649,7 @@ We welcome contributions! Here's how to get started:
 4. **Push** to the branch (`git push origin feature/amazing-feature`)
 5. **Open** a Pull Request
 
-**Development Setup:**
+### Development Setup
 ```bash
 # Install development dependencies
 go mod download
@@ -489,14 +661,8 @@ go test ./...
 go build -tags dev -o gophertainer .
 ```
 
----
-
 ## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
+see the [LICENSE](LICENSE) file for details.
 ## 📚 References
 
 - [OCI Runtime Specification](https://github.com/opencontainers/runtime-spec)
@@ -507,9 +673,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-<div align="center">
-
-made by single dev
-
-</div>
-#madeby15yr
+**Gophertainer** - *Secure, Fast, and Reliable Container Runtime*

@@ -76,15 +76,15 @@ var (
 // TrackResource adds a resource for automatic cleanup
 func (rm *ResourceManager) TrackResource(id string, rtype ResourceType, data interface{}, cleanup func() error) error {
 	if atomic.LoadInt32(&rm.closed) != 0 {
-		return errors.New("resource manager is closed")
+		return NewContainerError(ErrInternalError, "resource manager is closed")
 	}
 	
 	if id == "" {
-		return errors.New("resource ID cannot be empty")
+		return NewContainerError(ErrConfigValidation, "resource ID cannot be empty")
 	}
 	
 	if cleanup == nil {
-		return errors.New("cleanup function cannot be nil")
+		return NewContainerError(ErrConfigValidation, "cleanup function cannot be nil")
 	}
 	
 	rm.mu.Lock()
@@ -92,7 +92,7 @@ func (rm *ResourceManager) TrackResource(id string, rtype ResourceType, data int
 	
 	// Check for duplicate IDs
 	if _, exists := rm.resources[id]; exists {
-		return fmt.Errorf("resource with ID %s already tracked", id)
+		return NewContainerError(ErrInternalError, fmt.Sprintf("resource with ID %s already tracked", id))
 	}
 	
 	resource := &TrackedResource{
@@ -122,7 +122,7 @@ func (rm *ResourceManager) CleanupResource(ctx context.Context, id string) error
 	rm.mu.RUnlock()
 	
 	if !exists {
-		return fmt.Errorf("resource %s not found", id)
+		return NewContainerError(ErrInternalError, fmt.Sprintf("resource %s not found", id))
 	}
 	
 	// Create a timeout for cleanup

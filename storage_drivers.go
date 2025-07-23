@@ -116,11 +116,11 @@ func NewStorageManager(ctx context.Context, config StorageDriverConfig) (*Storag
 	if config.Driver != "" {
 		driver, exists := sm.drivers[config.Driver]
 		if !exists {
-			return nil, fmt.Errorf("unknown storage driver: %s", config.Driver)
+			return nil, WrapStorageError("driver_lookup", config.Driver, fmt.Errorf("unknown storage driver: %s", config.Driver))
 		}
 		
 		if err := driver.Init(ctx, config); err != nil {
-			return nil, fmt.Errorf("failed to initialize %s driver: %w", config.Driver, err)
+			return nil, WrapStorageError("driver_init", config.Driver, fmt.Errorf("failed to initialize %s driver: %w", config.Driver, err))
 		}
 		
 		logger.Info("Storage driver initialized", "driver", config.Driver)
@@ -138,7 +138,7 @@ func (sm *StorageManager) RegisterDriver(driver StorageDriver) {
 func (sm *StorageManager) GetDriver() (StorageDriver, error) {
 	driver, exists := sm.drivers[sm.config.Driver]
 	if !exists {
-		return nil, fmt.Errorf("driver %s not found", sm.config.Driver)
+		return nil, WrapStorageError("driver_get", sm.config.Driver, fmt.Errorf("driver %s not found", sm.config.Driver))
 	}
 	return driver, nil
 }
@@ -181,13 +181,13 @@ func (d *OverlayFSDriver) Init(ctx context.Context, config StorageDriverConfig) 
 	// Create directories
 	for _, dir := range []string{d.lowerDir, d.upperDir, d.workDir, d.mergedDir} {
 		if err := os.MkdirAll(dir, 0700); err != nil {
-			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+			return WrapStorageError("directory_create", dir, fmt.Errorf("failed to create directory %s: %w", dir, err))
 		}
 	}
 	
 	// Check for OverlayFS support
 	if err := d.checkOverlaySupport(ctx); err != nil {
-		return fmt.Errorf("overlayfs not supported: %w", err)
+		return WrapStorageError("overlayfs_check", "/proc/filesystems", fmt.Errorf("overlayfs not supported: %w", err))
 	}
 	
 	d.logger.Info("OverlayFS driver initialized", "root", config.GraphRoot)
@@ -206,7 +206,7 @@ func (d *OverlayFSDriver) checkOverlaySupport(ctx context.Context) error {
 	
 	// Try to load overlay module
 	if err := exec.CommandContext(ctx, "modprobe", "overlay").Run(); err != nil {
-		return fmt.Errorf("failed to load overlay module: %w", err)
+		return WrapStorageError("module_load", "overlay", fmt.Errorf("failed to load overlay module: %w", err))
 	}
 	
 	return nil
@@ -216,13 +216,13 @@ func (d *OverlayFSDriver) checkOverlaySupport(ctx context.Context) error {
 func (d *OverlayFSDriver) Create(ctx context.Context, id string, parentID string, opts CreateOptions) (*StorageInfo, error) {
 	layerDir := filepath.Join(d.upperDir, id)
 	if err := os.MkdirAll(layerDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create layer directory: %w", err)
+		return nil, WrapStorageError("layer_create", layerDir, fmt.Errorf("failed to create layer directory: %w", err))
 	}
 	
 	// Create work directory for this layer
 	workDir := filepath.Join(d.workDir, id)
 	if err := os.MkdirAll(workDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create work directory: %w", err)
+		return nil, WrapStorageError("work_dir_create", workDir, fmt.Errorf("failed to create work directory: %w", err))
 	}
 	
 	info := &StorageInfo{
@@ -236,7 +236,7 @@ func (d *OverlayFSDriver) Create(ctx context.Context, id string, parentID string
 	
 	// Save layer metadata
 	if err := d.saveLayerInfo(id, info); err != nil {
-		return nil, fmt.Errorf("failed to save layer info: %w", err)
+		return nil, WrapStorageError("layer_info_save", id, fmt.Errorf("failed to save layer info: %w", err))
 	}
 	
 	d.logger.Info("Created overlay layer", "id", id, "parent", parentID)
@@ -247,7 +247,7 @@ func (d *OverlayFSDriver) Create(ctx context.Context, id string, parentID string
 func (d *OverlayFSDriver) Mount(ctx context.Context, id string, opts MountOptions) (string, error) {
 	mergedDir := filepath.Join(d.mergedDir, id)
 	if err := os.MkdirAll(mergedDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create merged directory: %w", err)
+		return "", WrapStorageError("merged_dir_create", mergedDir, fmt.Errorf("failed to create merged directory: %w", err))
 	}
 	
 	upperDir := filepath.Join(d.upperDir, id)
@@ -259,14 +259,14 @@ func (d *OverlayFSDriver) Mount(ctx context.Context, id string, opts MountOption
 	// Get layer info to find parent layers
 	info, err := d.getLayerInfo(id)
 	if err != nil {
-		return "", fmt.Errorf("failed to get layer info: %w", err)
+		return "", WrapStorageError("layer_info_get", id, fmt.Errorf("failed to get layer info: %w", err))
 	}
 	
 	// Build lower layer chain
 	if info.ParentID != "" {
 		parentLowers, err := d.getLowerDirs(info.ParentID)
 		if err != nil {
-			return "", fmt.Errorf("failed to get parent lower dirs: %w", err)
+			return "", WrapStorageError("parent_lower_dirs", info.ParentID, fmt.Errorf("failed to get parent lower dirs: %w", err))
 		}
 		lowerDirs = append(lowerDirs, parentLowers...)
 	}
@@ -283,7 +283,7 @@ func (d *OverlayFSDriver) Mount(ctx context.Context, id string, opts MountOption
 	
 	// Mount overlay
 	if err := unix.Mount("overlay", mergedDir, "overlay", 0, mountOpts); err != nil {
-		return "", fmt.Errorf("failed to mount overlay: %w", err)
+		return "", WrapStorageError("overlay_mount", mergedDir, fmt.Errorf("failed to mount overlay: %w", err))
 	}
 	
 	d.logger.Info("Mounted overlay", "id", id, "path", mergedDir)
@@ -295,7 +295,7 @@ func (d *OverlayFSDriver) Unmount(ctx context.Context, id string) error {
 	mergedDir := filepath.Join(d.mergedDir, id)
 	
 	if err := unix.Unmount(mergedDir, 0); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to unmount overlay: %w", err)
+		return WrapStorageError("overlay_unmount", mergedDir, fmt.Errorf("failed to unmount overlay: %w", err))
 	}
 	
 	d.logger.Info("Unmounted overlay", "id", id)
@@ -475,7 +475,7 @@ func (d *DeviceMapperDriver) Init(ctx context.Context, config StorageDriverConfi
 	
 	// Initialize device mapper components
 	if err := d.initDeviceMapper(ctx); err != nil {
-		return fmt.Errorf("failed to initialize device mapper: %w", err)
+		return WrapStorageError("devicemapper_init", d.poolName, fmt.Errorf("failed to initialize device mapper: %w", err))
 	}
 	
 	d.logger.Info("Device Mapper driver initialized",
@@ -495,12 +495,12 @@ func (d *DeviceMapperDriver) initDeviceMapper(ctx context.Context) error {
 	
 	// Set up loopback devices for data and metadata
 	if err := d.setupLoopbackDevices(ctx); err != nil {
-		return fmt.Errorf("failed to setup loopback devices: %w", err)
+		return WrapStorageError("loopback_setup", "loopback_devices", fmt.Errorf("failed to setup loopback devices: %w", err))
 	}
 	
 	// Create thin pool
 	if err := d.createThinPool(ctx); err != nil {
-		return fmt.Errorf("failed to create thin pool: %w", err)
+		return WrapStorageError("thin_pool_create", d.poolName, fmt.Errorf("failed to create thin pool: %w", err))
 	}
 	
 	return nil
@@ -510,7 +510,7 @@ func (d *DeviceMapperDriver) initDeviceMapper(ctx context.Context) error {
 func (d *DeviceMapperDriver) checkDeviceMapperSupport(ctx context.Context) error {
 	// Check for dmsetup command
 	if _, err := exec.LookPath("dmsetup"); err != nil {
-		return fmt.Errorf("dmsetup command not found: %w", err)
+		return WrapStorageError("dmsetup_missing", "dmsetup", fmt.Errorf("dmsetup command not found: %w", err))
 	}
 	
 	// Check if device mapper module is loaded
@@ -524,7 +524,7 @@ func (d *DeviceMapperDriver) checkDeviceMapperSupport(ctx context.Context) error
 	// Try to load device mapper modules
 	for _, module := range []string{"dm_mod", "dm_thin_pool"} {
 		if err := exec.CommandContext(ctx, "modprobe", module).Run(); err != nil {
-			return fmt.Errorf("failed to load module %s: %w", module, err)
+			return WrapStorageError("module_load", module, fmt.Errorf("failed to load module %s: %w", module, err))
 		}
 	}
 	
@@ -541,25 +541,25 @@ func (d *DeviceMapperDriver) setupLoopbackDevices(ctx context.Context) error {
 	// Create data loopback file
 	dataFile := filepath.Join(dataDir, "data")
 	if err := d.createSparseFile(dataFile, d.dataSize); err != nil {
-		return fmt.Errorf("failed to create data file: %w", err)
+		return WrapStorageError("data_file_create", dataFile, fmt.Errorf("failed to create data file: %w", err))
 	}
 	
 	// Create metadata loopback file
 	metadataFile := filepath.Join(dataDir, "metadata")
 	if err := d.createSparseFile(metadataFile, d.metadataSize); err != nil {
-		return fmt.Errorf("failed to create metadata file: %w", err)
+		return WrapStorageError("metadata_file_create", metadataFile, fmt.Errorf("failed to create metadata file: %w", err))
 	}
 	
 	// Setup loopback devices
 	dataLoop, err := d.setupLoopback(ctx, dataFile)
 	if err != nil {
-		return fmt.Errorf("failed to setup data loopback: %w", err)
+		return WrapStorageError("data_loopback_setup", dataFile, fmt.Errorf("failed to setup data loopback: %w", err))
 	}
 	d.dataLoopback = dataLoop
 	
 	metadataLoop, err := d.setupLoopback(ctx, metadataFile)
 	if err != nil {
-		return fmt.Errorf("failed to setup metadata loopback: %w", err)
+		return WrapStorageError("metadata_loopback_setup", metadataFile, fmt.Errorf("failed to setup metadata loopback: %w", err))
 	}
 	d.metadataLoopback = metadataLoop
 	
@@ -620,7 +620,7 @@ func (d *DeviceMapperDriver) createThinPool(ctx context.Context) error {
 	cmd = exec.CommandContext(ctx, "dmsetup", "create", d.poolName)
 	cmd.Stdin = strings.NewReader(table)
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create thin pool: %w", err)
+		return WrapStorageError("thin_pool_dmsetup", d.poolName, fmt.Errorf("failed to create thin pool: %w", err))
 	}
 	
 	return nil
@@ -639,13 +639,13 @@ func (d *DeviceMapperDriver) Create(ctx context.Context, id string, parentID str
 	cmd := exec.CommandContext(ctx, "dmsetup", "create", deviceName)
 	cmd.Stdin = strings.NewReader(table)
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to create thin device: %w", err)
+		return nil, WrapStorageError("thin_device_create", deviceName, fmt.Errorf("failed to create thin device: %w", err))
 	}
 	
 	// Create filesystem
 	devicePath := fmt.Sprintf("/dev/mapper/%s", deviceName)
 	if err := d.createFilesystem(ctx, devicePath); err != nil {
-		return nil, fmt.Errorf("failed to create filesystem: %w", err)
+		return nil, WrapStorageError("filesystem_create", devicePath, fmt.Errorf("failed to create filesystem: %w", err))
 	}
 	
 	info := &StorageInfo{
@@ -673,7 +673,7 @@ func (d *DeviceMapperDriver) createFilesystem(ctx context.Context, device string
 	case "xfs":
 		cmd = exec.CommandContext(ctx, "mkfs.xfs", "-f", device)
 	default:
-		return fmt.Errorf("unsupported filesystem: %s", d.filesystem)
+		return WrapStorageError("filesystem_unsupported", d.filesystem, fmt.Errorf("unsupported filesystem: %s", d.filesystem))
 	}
 	
 	return cmd.Run()
@@ -686,7 +686,7 @@ func (d *DeviceMapperDriver) Mount(ctx context.Context, id string, opts MountOpt
 	
 	mountDir := filepath.Join(d.config.GraphRoot, "devicemapper", "mounts", id)
 	if err := os.MkdirAll(mountDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create mount directory: %w", err)
+		return "", WrapStorageError("mount_dir_create", mountDir, fmt.Errorf("failed to create mount directory: %w", err))
 	}
 	
 	// Mount the device
@@ -696,7 +696,7 @@ func (d *DeviceMapperDriver) Mount(ctx context.Context, id string, opts MountOpt
 	}
 	
 	if err := unix.Mount(devicePath, mountDir, d.filesystem, flags, ""); err != nil {
-		return "", fmt.Errorf("failed to mount device: %w", err)
+		return "", WrapStorageError("device_mount", devicePath, fmt.Errorf("failed to mount device: %w", err))
 	}
 	
 	d.logger.Info("Mounted device mapper device", "id", id, "path", mountDir)
@@ -708,7 +708,7 @@ func (d *DeviceMapperDriver) Unmount(ctx context.Context, id string) error {
 	mountDir := filepath.Join(d.config.GraphRoot, "devicemapper", "mounts", id)
 	
 	if err := unix.Unmount(mountDir, 0); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to unmount device: %w", err)
+		return WrapStorageError("device_unmount", mountDir, fmt.Errorf("failed to unmount device: %w", err))
 	}
 	
 	d.logger.Info("Unmounted device mapper device", "id", id)
@@ -727,7 +727,7 @@ func (d *DeviceMapperDriver) Remove(ctx context.Context, id string) error {
 	// Remove device
 	cmd := exec.CommandContext(ctx, "dmsetup", "remove", deviceName)
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to remove thin device: %w", err)
+		return WrapStorageError("thin_device_remove", deviceName, fmt.Errorf("failed to remove thin device: %w", err))
 	}
 	
 	// Remove mount directory
@@ -798,7 +798,7 @@ func parseSize(sizeStr string) (uint64, error) {
 	re := regexp.MustCompile(`^(\d+)\s*([KMGT]?B?)$`)
 	matches := re.FindStringSubmatch(strings.ToUpper(sizeStr))
 	if len(matches) != 3 {
-		return 0, fmt.Errorf("invalid size format: %s", sizeStr)
+		return 0, WrapStorageError("size_parse", sizeStr, fmt.Errorf("invalid size format: %s", sizeStr))
 	}
 	
 	size, err := strconv.ParseUint(matches[1], 10, 64)

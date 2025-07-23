@@ -8,13 +8,15 @@ import (
 
 // Dependencies holds all system dependencies for dependency injection
 type Dependencies struct {
-	Logger          *slog.Logger
-	ResourceManager *ResourceManager
-	SystemLimits    *SystemLimits
-	SystemMonitor   *SystemMonitor
-	SecurityManager *SecurityHardeningManager
-	MetricsCollector *MetricsCollector
-	ConfigValidator *Validator
+	Logger            *slog.Logger
+	ResourceManager   *ResourceManager
+	SystemLimits      *SystemLimits
+	SystemMonitor     *SystemMonitor
+	SecurityManager   *SecurityHardeningManager
+	MetricsCollector  *MetricsCollector
+	ConfigValidator   *Validator
+	PluginManager     *PluginManager
+	PluginIntegration *PluginIntegration
 }
 
 // DependencyContainer manages dependency injection
@@ -66,14 +68,43 @@ func (dc *DependencyContainer) Initialize(ctx context.Context) error {
 		// Initialize config validator
 		configValidator := NewValidator()
 		
+		// Initialize plugin system
+		var pluginManager *PluginManager
+		var pluginIntegration *PluginIntegration
+		
+		pluginConfig := &PluginManagerConfig{
+			PluginDirs:      []string{"/usr/local/lib/gophertainer/plugins", "/etc/gophertainer/plugins"},
+			ConfigDir:       "/etc/gophertainer/plugin-config",
+			EnableSecurity:  true,
+			LoadTimeout:     30 * 1000, // 30 seconds in milliseconds
+			StartTimeout:    30 * 1000, // 30 seconds in milliseconds
+			AllowedTypes:    []PluginType{PluginTypeStorage, PluginTypeNetwork, PluginTypeMonitoring, PluginTypeRuntime, PluginTypeSecurity},
+			DisabledPlugins: []string{},
+			PluginConfig:    make(map[string]map[string]interface{}),
+		}
+		
+		pluginManager, err := NewPluginManager(ctx, pluginConfig)
+		if err != nil {
+			logger.Warn("Failed to initialize plugin manager", "error", err)
+		} else {
+			pluginIntegration = NewPluginIntegration(ctx, pluginManager)
+			
+			// Discover and load plugins
+			if discoverErr := pluginManager.DiscoverPlugins(ctx); discoverErr != nil {
+				logger.Warn("Plugin discovery failed", "error", discoverErr)
+			}
+		}
+		
 		dc.deps = &Dependencies{
-			Logger:          logger,
-			ResourceManager: resourceManager,
-			SystemLimits:    systemLimits,
-			SystemMonitor:   systemMonitor,
-			SecurityManager: securityManager,
-			MetricsCollector: metricsCollector,
-			ConfigValidator: configValidator,
+			Logger:            logger,
+			ResourceManager:   resourceManager,
+			SystemLimits:      systemLimits,
+			SystemMonitor:     systemMonitor,
+			SecurityManager:   securityManager,
+			MetricsCollector:  metricsCollector,
+			ConfigValidator:   configValidator,
+			PluginManager:     pluginManager,
+			PluginIntegration: pluginIntegration,
 		}
 		
 		// Start background services
@@ -102,6 +133,13 @@ func (dc *DependencyContainer) Shutdown(ctx context.Context) error {
 	}
 	
 	var shutdownErrors []error
+	
+	// Shutdown plugin system first
+	if dc.deps.PluginManager != nil {
+		if err := dc.deps.PluginManager.Shutdown(ctx); err != nil {
+			shutdownErrors = append(shutdownErrors, err)
+		}
+	}
 	
 	// Stop metrics collector
 	if dc.deps.MetricsCollector != nil {

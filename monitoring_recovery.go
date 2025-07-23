@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -260,7 +259,7 @@ func InitializeMonitoringAndRecovery(ctx context.Context) error {
 	
 	// Start monitoring
 	if err := globalSystemMonitor.Start(); err != nil {
-		return fmt.Errorf("failed to start system monitor: %w", err)
+		return NewContainerErrorWithCause(ErrInternalError, "failed to start system monitor", err)
 	}
 	
 	logger.Info("Monitoring and recovery system initialized successfully")
@@ -272,7 +271,7 @@ func (sm *SystemMonitor) Start() error {
 	sm.mu.Lock()
 	if sm.active {
 		sm.mu.Unlock()
-		return errors.New("system monitor is already active")
+		return NewContainerError(ErrInternalError, "system monitor is already active")
 	}
 	sm.active = true
 	sm.mu.Unlock()
@@ -697,7 +696,7 @@ func (f *FileSystemHealthChecker) CheckHealth(ctx context.Context) error {
 	criticalPaths := []string{"/", "/tmp", "/proc", "/sys"}
 	for _, path := range criticalPaths {
 		if _, err := os.Stat(path); err != nil {
-			return fmt.Errorf("critical path %s not accessible: %w", path, err)
+			return NewContainerErrorWithCause(ErrSystemCall, fmt.Sprintf("critical path %s not accessible", path), err)
 		}
 	}
 	return nil
@@ -711,12 +710,12 @@ func (m *MemoryHealthChecker) Priority() HealthPriority { return HealthPriorityH
 func (m *MemoryHealthChecker) CheckHealth(ctx context.Context) error {
 	var meminfo syscall.Sysinfo_t
 	if err := syscall.Sysinfo(&meminfo); err != nil {
-		return fmt.Errorf("failed to get memory info: %w", err)
+		return NewContainerErrorWithCause(ErrSystemCall, "failed to get memory info", err)
 	}
 	
 	memUsage := float64(meminfo.Totalram-meminfo.Freeram) / float64(meminfo.Totalram) * 100
 	if memUsage > 95 {
-		return fmt.Errorf("critical memory usage: %.1f%%", memUsage)
+		return NewContainerError(ErrResourceExhausted, fmt.Sprintf("critical memory usage: %.1f%%", memUsage))
 	}
 	
 	return nil
@@ -731,7 +730,7 @@ func (p *ProcessHealthChecker) CheckHealth(ctx context.Context) error {
 	// Check if we can still create processes
 	cmd := exec.CommandContext(ctx, "true")
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("cannot create processes: %w", err)
+		return NewContainerErrorWithCause(ErrSystemCall, "cannot create processes", err)
 	}
 	return nil
 }
@@ -745,7 +744,7 @@ func (n *NetworkHealthChecker) CheckHealth(ctx context.Context) error {
 	// Check if loopback interface is up
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		return fmt.Errorf("failed to get network interfaces: %w", err)
+		return NewContainerErrorWithCause(ErrSystemCall, "failed to get network interfaces", err)
 	}
 	
 	for _, iface := range interfaces {
@@ -754,5 +753,5 @@ func (n *NetworkHealthChecker) CheckHealth(ctx context.Context) error {
 		}
 	}
 	
-	return errors.New("loopback interface not found or not up")
+	return NewContainerError(ErrNetworkSetup, "loopback interface not found or not up")
 }
