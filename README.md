@@ -10,7 +10,8 @@
 
 **A high-performance container runtime written in Go**
 
-*Secure • Fast • OCI-Compliant • Feature-Rich*
+*weekly to monthly update*
+*bug report always welcome*
 
 </div>
 
