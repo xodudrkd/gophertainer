@@ -1,0 +1,96 @@
+[Unit]
+# This is a systemd template unit. The "%i" is a placeholder for the instance name.
+# For example, `systemctl start gophertainer@my-container.service` will set %i to "my-container".
+Description=Gophertainer Container %i
+Documentation=https://github.com/user/gophertainer-example
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# 'simple' type means systemd assumes the service is started immediately when the main process is forked off.
+# This is appropriate since the application doesn't implement the sd_notify protocol.
+Type=simple
+
+# The ExecStartPre command is run before the main process is started.
+# Here, it's used for a dry-run to validate the configuration.
+# This command now robustly checks for the image file before attempting validation.
+ExecStartPre=/bin/sh -c 'if [ -f /var/lib/gophertainer/images/%i.img ]; then /usr/bin/gophertainer --dry-run --name %i --rootfs /var/lib/gophertainer/images/%i.img --cmd "/sbin/init"; else echo "Warning: Image /var/lib/gophertainer/images/%i.img not found, skipping dry-run validation"; fi'
+
+# The main command to start the container.
+# --name %i: Sets the container name to the systemd instance name.
+# --rootfs: Specifies the path to the container's root filesystem image.
+# --cmd: The command to run inside the container.
+# --init: Run a minimal init process inside the container to reap zombies.
+# --timeout 0: Disables the internal timeout, letting systemd manage the service lifecycle.
+ExecStart=/usr/bin/gophertainer --name %i --rootfs /var/lib/gophertainer/images/%i.img --cmd "/sbin/init" --init --timeout 0
+
+# Command to stop the container gracefully by sending SIGTERM to the main process.
+ExecStop=/bin/kill -s TERM $MAINPID
+
+# A post-stop command for cleanup logic.
+# This command now robustly checks if the cleanup script exists and is executable.
+ExecStopPost=/bin/sh -c 'if [ -x /usr/bin/gophertainer-cleanup ]; then /usr/bin/gophertainer-cleanup %i; else echo "gophertainer-cleanup not found or not executable, skipping"; fi'
+
+# Automatically restart the service if it fails.
+Restart=on-failure
+RestartSec=10s
+
+# Prevent rapid restart loops by limiting restart attempts within a specific interval.
+StartLimitInterval=300s
+StartLimitBurst=5
+
+# Timeouts for starting and stopping the service.
+TimeoutStartSec=120s
+TimeoutStopSec=60s
+
+# Send SIGKILL if the process doesn't terminate within TimeoutStopSec.
+KillMode=mixed
+KillSignal=SIGTERM
+
+# --- Security Hardening ---
+# These settings significantly improve the security of the service by restricting its privileges.
+PrivateTmp=yes          # Give the service its own /tmp and /var/tmp.
+ProtectSystem=strict    # Mount /usr, /boot, and /etc as read-only.
+ProtectHome=yes         # Make home directories inaccessible.
+NoNewPrivileges=yes     # Prevent the service and its children from gaining new privileges.
+RestrictRealtime=yes    # Prevent the service from acquiring realtime scheduling.
+RestrictSUIDSGID=yes    # Prevent the execution of setuid/setgid binaries.
+RemoveIPC=yes           # Remove System V IPC objects when the service stops.
+LockPersonality=yes     # Lock the process personality to prevent changes.
+
+# Additional security restrictions
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+
+# --- Resource Limits ---
+# Set limits on the resources the service can consume.
+LimitNOFILE=1048576     # Maximum number of open file descriptors.
+LimitNPROC=32768        # Maximum number of processes.
+TasksMax=512            # Cgroup-based limit on the number of tasks.
+MemoryMax=2G            # Cgroup-based memory limit.
+CPUQuota=200%           # Cgroup-based CPU limit (allows up to 2 full cores).
+
+# --- Cgroup Delegation ---
+# Allows the service to manage its own subtree in the cgroup hierarchy.
+# This is crucial for a container runtime that needs to create its own cgroups.
+Delegate=yes
+
+# --- Working Directory and Environment ---
+WorkingDirectory=/var/lib/gophertainer
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# --- Logging ---
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gophertainer-%i
+
+[Install]
+# This specifies that the service should be started at boot in a multi-user environment.
+# Enable with `systemctl enable gophertainer@<instance>.service`.
+WantedBy=multi-user.target
+
